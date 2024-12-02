@@ -111,9 +111,14 @@ Este dataset proporciona una base rica para explorar las relaciones entre los fa
 Cargamos ahora los datos y pasamos **`Crop_Yield_MT_per_HA`** como la primer columna
 ```{r}
 file_path <- "Data/climate_change_impact_on_agriculture_2024.csv"
-## Data obtained from https://www.kaggle.com/datasets/talhachoudary/global-agriculture-climate-impact-dataset
 climate_data <- read.csv(file_path)
-climate_data <- climate_data[, c("Crop_Yield_MT_per_HA", setdiff(names(climate_data), "Crop_Yield_MT_per_HA"))]
+# Seleccionar solo un año
+climate_data <- climate_data[climate_data$Year == 2020, ]
+# Agrupar países en continentes
+library(countrycode)
+climate_data$Continent <- countrycode(climate_data$Country, "country.name", "continent")
+climate_data <- climate_data[, c("Crop_Yield_MT_per_HA", "Continent", setdiff(names(climate_data), c("Crop_Yield_MT_per_HA", "Continent", "Year")))]
+
 ```
 
 
@@ -361,10 +366,58 @@ ggplot(climate_data, aes(x = Economic_Impact_Million_USD)) +
   )
 ```
 
+##Modelo Gamma para la Productividad Agrícola
+# Cargar librerías necesarias
+if (!require("MASS")) install.packages("MASS")
+library(MASS)
+# Ajustar un modelo Gamma para la variable objetivo
+gamma_model <- glm(Crop_Yield_MT_per_HA ~ Average_Temperature_C + Total_Precipitation_mm + CO2_Emissions_MT + Extreme_Weather_Events + Irrigation_Access_ + Fertilizer_Use_KG_per_HA, 
+                   family = Gamma(link = "log"), 
+                   data = climate_data)
+# Resumen del modelo
+summary(gamma_model)
+
+
+##Visualización del Ajuste del Modelo
+
+# Predicción del modelo
+climate_data$Predicted_Yield <- predict(gamma_model, type = "response")
+# Gráfico comparativo
+library(ggplot2)
+ggplot(climate_data, aes(x = Crop_Yield_MT_per_HA, y = Predicted_Yield)) +
+  geom_point(color = "blue") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  theme_minimal() +
+  labs(
+    title = "Comparación entre valores observados y predichos",
+    x = "Rendimiento Observado (Toneladas/Ha)",
+    y = "Rendimiento Predicho (Toneladas/Ha)"
+  )
+
+
 
 
 ### Variables Categóricas: Tablas de Frecuencia
 A continuación, se presentan las tablas de frecuencia para las variables categóricas del dataset.
+
+# Frecuencia de Continentes
+continent_freq <- as.data.frame(table(climate_data$Continent))
+colnames(continent_freq) <- c("Continent", "Frequency")
+continent_freq <- continent_freq %>%
+  mutate(Percentage = (Frequency / sum(Frequency)) * 100)
+
+# Gráfico de frecuencia por continente
+ggplot(continent_freq, aes(x = reorder(Continent, -Frequency), y = Frequency)) +
+  geom_bar(stat = "identity", fill = "lightblue") +
+  geom_text(aes(label = paste0(round(Percentage, 1), "%")), 
+            vjust = -0.5, size = 3.5, color = "black") +
+  theme_minimal() +
+  labs(
+    title = "Frecuencia y Porcentaje por Continente",
+    x = "Continente",
+    y = "Frecuencia"
+  )
+
 
 Frecuencia  de Países **`Country`**
 ```{r}
